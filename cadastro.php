@@ -1,69 +1,95 @@
 <?php
-// ARQUIVO: cadastro.php (Versão Final com Banco de Dados)
+// ARQUIVO: cadastrar_funcionario.php
 
-// Cabeçalhos de permissão CORS
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
 
-// Responde a requisições OPTIONS (verificação de CORS do navegador)
 if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-// Inclui a lógica de conexão com o banco
 require_once 'conexao.php';
 
-// Pega os dados enviados pelo frontend no formato x-www-form-urlencoded
-$usuario = isset($_POST['usuario']) ? trim($_POST['usuario']) : '';
-$email = isset($_POST['email']) ? trim($_POST['email']) : '';
-$senha = isset($_POST['senha']) ? trim($_POST['senha']) : '';
+// Pega os dados do formulário
+$n_registro = isset($_POST['n_registro']) ? trim($_POST['n_registro']) : null;
+$nome_funcionario = isset($_POST['nome_funcionario']) ? trim($_POST['nome_funcionario']) : '';
+$cargo = isset($_POST['cargo']) ? trim($_POST['cargo']) : '';
+$salario = isset($_POST['salario']) ? trim($_POST['salario']) : null;
 
-// 1. Validação dos dados
-if (empty($usuario) || empty($email) || empty($senha)) {
+// REMOVIDO - Não vamos mais capturar estes valores do formulário
+// $inss = isset($_POST['inss']) ? trim($_POST['inss']) : null; 
+// $salario_liquido = isset($_POST['salario_liquido']) ? trim($_POST['salario_liquido']) : null;
+
+// --- ADICIONADO: Bloco de Cálculo ---
+$inss = null;
+$salario_liquido = null;
+
+// Verifica se o salário foi enviado e é um número para fazer o cálculo
+if ($salario !== null && is_numeric($salario)) {
+    $taxa_inss = 0.10; // Taxa de 10%
+    $salario_float = (float)$salario; // Garante que o salário é um número float
+
+    $inss = $salario_float * $taxa_inss;
+    $salario_liquido = $salario_float - $inss;
+}
+// --- FIM DO BLOCO DE CÁLCULO ---
+
+
+$data_admissao_br = isset($_POST['data_admissao']) ? trim($_POST['data_admissao']) : null;
+$data_admissao_mysql = null; // Inicia a variável que irá para o banco como nula
+
+// Se uma data foi enviada, converte o formato
+if ($data_admissao_br) {
+    // Cria um objeto de data a partir do formato brasileiro (Dia/Mês/Ano)
+    $date_obj = DateTime::createFromFormat('d/m/Y', $data_admissao_br);
+    
+    // Se a conversão for bem-sucedida, formata para o padrão do MySQL (Ano-Mês-Dia)
+    if ($date_obj) {
+        $data_admissao_mysql = $date_obj->format('Y-m-d');
+    }
+}
+
+
+
+// Validação básica
+if (empty($n_registro) || empty($nome_funcionario)) {
     http_response_code(400); // Bad Request
-    echo json_encode(['erro' => "Dados incompletos. 'usuario', 'email' e 'senha' são obrigatórios."]);
+    echo json_encode(['erro' => "Dados incompletos. 'n_registro' e 'nome_funcionario' são obrigatórios."]);
     exit();
 }
 
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    http_response_code(400);
-    echo json_encode(['erro' => "Formato de e-mail inválido."]);
-    exit();
-}
-
-// 2. Verificar se o e-mail já existe no banco
-$sql_verifica = "SELECT id FROM usuarios WHERE email = ?";
+// Verificar se o n_registro já existe para evitar duplicatas
+$sql_verifica = "SELECT n_registro FROM Lista_Usuarios WHERE n_registro = ?";
 $stmt_verifica = mysqli_prepare($conexao, $sql_verifica);
-mysqli_stmt_bind_param($stmt_verifica, "s", $email);
+mysqli_stmt_bind_param($stmt_verifica, "i", $n_registro); // 'i' for integer
 mysqli_stmt_execute($stmt_verifica);
 mysqli_stmt_store_result($stmt_verifica);
 
 if (mysqli_stmt_num_rows($stmt_verifica) > 0) {
     http_response_code(409); // Conflict
-    echo json_encode(['erro' => "Este e-mail já está cadastrado."]);
+    echo json_encode(['erro' => "O número de registro '$n_registro' já está cadastrado."]);
     mysqli_stmt_close($stmt_verifica);
-    mysqli_close($conexao);
     exit();
 }
 mysqli_stmt_close($stmt_verifica);
 
-// 3. Criptografar a senha (Segurança Essencial)
-$senha_criptografada = password_hash($senha, PASSWORD_BCRYPT);
 
-// 4. Inserir o novo usuário no banco
-$sql_insere = "INSERT INTO usuarios (usuario, email, senha) VALUES (?, ?, ?)";
+// Inserir o novo funcionário
+$sql_insere = "INSERT INTO Lista_Usuarios (n_registro, nome_funcionario, data_admissao, cargo, salario, inss, salario_liquido) VALUES (?, ?, ?, ?, ?, ?, ?)";
 $stmt_insere = mysqli_prepare($conexao, $sql_insere);
-mysqli_stmt_bind_param($stmt_insere, "sss", $usuario, $email, $senha_criptografada);
+
+// Usa as variáveis calculadas de inss e salario_liquido
+mysqli_stmt_bind_param($stmt_insere, "isssddd", $n_registro, $nome_funcionario, $data_admissao_mysql, $cargo, $salario, $inss, $salario_liquido);
 
 if (mysqli_stmt_execute($stmt_insere)) {
     http_response_code(201); // Created
-    echo json_encode(['msg' => "Usuário cadastrado com sucesso!"]);
+    echo json_encode(['msg' => "Funcionário cadastrado com sucesso!"]);
 } else {
     http_response_code(500); // Internal Server Error
-    echo json_encode(['erro' => "Ocorreu um erro no servidor ao tentar cadastrar o usuário."]);
+    echo json_encode(['erro' => "Ocorreu um erro no servidor ao cadastrar."]);
 }
 
 mysqli_stmt_close($stmt_insere);
