@@ -2,10 +2,10 @@
 // ARQUIVO: conexao.php (VERSÃO CORRIGIDA)
 
 // Pega as credenciais das Variáveis de Ambiente configuradas na Render
-$host = getenv('DB_HOST');
-$db_name = getenv('DB_NAME');
-$username = getenv('DB_USER');
-$password = getenv('DB_PASS');
+$host = 'b5fcwam3fxdo75arcgjg-mysql.services.clever-cloud.com';
+$db_name = 'b5fcwam3fxdo75arcgjg';
+$username = 'uzznkx8aeemao6f2';
+$password = 'XAtawNYSbvelIZF4A9ua';
 
 // Tenta criar a conexão
 $conexao = mysqli_connect($host, $username, $password, $db_name);
